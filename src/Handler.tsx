@@ -62,8 +62,8 @@ const Handler = ({ id, x, y, handleDrag, handleDragEnd }: Props) => {
         top: `${y}px`,
         transform: `translate(-50%, -50%)`,
         background: "#ffcc00",
-        width: 10,
-        height: 10,
+        width: 5,
+        height: 5,
         borderRadius: "50%",
         pointerEvents: "all",
       }}

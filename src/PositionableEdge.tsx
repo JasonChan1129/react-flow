@@ -18,6 +18,7 @@ type PositionHandler = {
   y: number;
   line: Line;
   movableDirection: "vertical" | "horizontal";
+  toBeDeleted?: boolean;
 };
 
 type Path = string;
@@ -48,7 +49,7 @@ export default function PositionableEdge({
   const [positionHandlers, setPositionHandlers] =
     useState<PositionHandler[]>(defaultHandlers);
 
-  const edgeSegmentsCount = positionHandlers.length + 1;
+  const edgeSegmentsCount = positionHandlers.length + 1
 
   const parser = new SVGPathDataParser();
 
@@ -80,19 +81,19 @@ export default function PositionableEdge({
             prev.x = middleOfPrevLine;
           }
 
-          // if (dx > 0 && next) {
-          //   const lengthOfNextLine = Math.abs(target.x + dx - nextNext.x);
-          //   if (lengthOfNextLine < 30) {
-          //     draft.splice(targetIndex + 1, 1);
-          //   }
-          // }
+          if (dx > 0 && next) {
+            const lengthOfNextLine = Math.abs(target.x + dx - nextNext.x);
+            if (lengthOfNextLine < 30) {
+              draft.splice(targetIndex + 1, 1);
+            }
+          }
 
-          // if (dx < 0 && prev) {
-          //   const lengthOfPrevLine = Math.abs(target.x + dx - prevPrev.x);
-          //   if (lengthOfPrevLine < 30) {
-          //     draft.splice(targetIndex - 1, 1);
-          //   }
-          // }
+          if (dx < 0 && prev) {
+            const lengthOfPrevLine = Math.abs(target.x + dx - prevPrev.x);
+            if (lengthOfPrevLine < 30) {
+              draft.splice(targetIndex - 1, 1);
+            }
+          }
         }
         if (dy !== 0 && target?.movableDirection === "vertical") {
           // adjust prev and next handler position to the center of the edge
@@ -108,20 +109,20 @@ export default function PositionableEdge({
             prev.y = (target.y + dy + prevPrev.y) / 2;
           }
 
-          // if (dy > 0) {
-          //   const lengthOfNextLine = Math.abs(target.y + dy - nextNext.y);
-          //   if (lengthOfNextLine < 30) {
-          //     draft.splice(targetIndex, 1);
-          //     draft.splice(targetIndex + 1, 1);
-          //   }
-          // }
-          // if (dy < 0) {
-          //   const lengthOfPrevLine = Math.abs(target.y + dy - prevPrev.y);
-          //   if (lengthOfPrevLine < 30) {
-          //     draft.splice(targetIndex, 1);
-          //     draft.splice(targetIndex - 1, 1);
-          //   }
-          // }
+          if (dy > 0) {
+            const lengthOfNextLine = Math.abs(target.y + dy - nextNext.y);
+            if (lengthOfNextLine < 30) {
+              draft.splice(targetIndex, 1);
+              draft.splice(targetIndex + 1, 1);
+            }
+          }
+          if (dy < 0) {
+            const lengthOfPrevLine = Math.abs(target.y + dy - prevPrev.y);
+            if (lengthOfPrevLine < 30) {
+              draft.splice(targetIndex, 1);
+              draft.splice(targetIndex - 1, 1);
+            }
+          }
         }
       })
     );
@@ -144,7 +145,7 @@ export default function PositionableEdge({
   };
 
   useEffect(() => {
-    if (sourceX === targetX) return
+    if (positionHandlers.length === 1) return
 
     if (sourceX !== prevSourceX.current) {
       const dx = sourceX - prevSourceX.current;
@@ -152,8 +153,10 @@ export default function PositionableEdge({
         produce(prev, (draft) => {
           draft[0].x += dx;
           const firstHorizontalLineLength = Math.abs(sourceX - draft?.[2]?.x);
-          if (firstHorizontalLineLength < 25) {
-            draft.splice(0, 2);
+          if (firstHorizontalLineLength < 40) {
+            draft[1].toBeDeleted = true
+          } else {
+            draft[1].toBeDeleted = false
           }
         })
       );
@@ -164,16 +167,18 @@ export default function PositionableEdge({
         produce(prev, (draft) => {
           draft[draft.length - 1].x += dx;
 
-          // const lastHorizontalLineLength = Math.abs(
-          //   targetX - draft?.[draft.length - 3]?.x
-          // );
-          // if (lastHorizontalLineLength < 25) {
-          //   draft.splice(draft.length - 2, 1);
-          //   draft.splice(draft.length - 2, 1);
-          // }
+          const lastHorizontalLineLength = Math.abs(
+            targetX - draft?.[draft.length - 3]?.x
+          );
+          if (lastHorizontalLineLength < 40) {
+            draft[draft.length - 2].toBeDeleted = true
+          } else {
+            draft[draft.length - 2].toBeDeleted = false
+          }
         })
       );
     }
+    
     setPositionHandlers((prev) =>
       produce(prev, (draft) => {
         draft.forEach((h, index) => {
@@ -186,12 +191,17 @@ export default function PositionableEdge({
             }
           }
           if (h.movableDirection === "vertical") {
-            h.x = (draft?.[index - 1]?.x + draft?.[index + 1]?.x) / 2;
+            if (index === draft.length - 1) {
+              h.x = (targetX + draft[draft.length - 2]?.x) / 2;
+            } else {
+              h.x = (draft?.[index - 1]?.x + draft?.[index + 1]?.x) / 2;
+            }
+           
           }
         });
       })
     );
-  }, [sourceX, targetX, sourceY, targetY]);
+  }, [positionHandlers.length, sourceX, targetX, sourceY, targetY]);
 
   useEffect(() => {
     prevSourceX.current = sourceX;
@@ -210,6 +220,10 @@ export default function PositionableEdge({
       segmentTargetY,
       sourcePosition,
       targetPosition;
+
+    if (positionHandlers[i]?.toBeDeleted) {
+      continue
+    }
 
     if (i === 0) {
       segmentSourceX = sourceX;
@@ -239,6 +253,17 @@ export default function PositionableEdge({
         segmentTargetX,
         segmentTargetY
       );
+    }
+
+    if (positionHandlers[i - 1]?.toBeDeleted) {
+      const lastHandler =  positionHandlers[i - 2]
+      const nextHandler = positionHandlers[i]
+      segmentSourceX = lastHandler.x
+      segmentSourceY = lastHandler.y
+      segmentTargetX = nextHandler.x
+      segmentTargetY = nextHandler.y
+      sourcePosition = Position.Bottom
+      targetPosition = Position.Top
     }
 
     lastTargetPosition = targetPosition;
@@ -286,7 +311,7 @@ export default function PositionableEdge({
         );
       })}
 
-      {positionHandlers.map((handler) => (
+      {positionHandlers.filter(h => !h?.toBeDeleted).map((handler) => (
         <EdgeLabelRenderer key={handler.id}>
           <Handler
             id={handler.id}
